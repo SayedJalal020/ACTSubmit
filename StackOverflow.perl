@@ -1,10 +1,10 @@
 #!/usr/bin/env perl
 #********************************************************************
-# NAME: Your Name
+# NAME: Sayed Jalal Sayed M Nasim
 # ASGT: Activity 03
 # ORGN: CSUB - CMPS 3500
 # FILE: StackOverflow.perl
-# DATE: MM/DD/YYYY
+# DATE: 03/13/2025
 #********************************************************************
 
 use strict;
@@ -14,6 +14,7 @@ use Getopt::Long qw(GetOptions);
 use FindBin qw($Bin);
 use lib $Bin;
 use File::Spec;
+use File::Basename qw(basename);
 
 use Tokenizer;
 use Report;
@@ -55,7 +56,7 @@ $raw_header =~ s/^\xEF\xBB\xBF//;
 my $sep_char = detect_separator($raw_header);
 
 seek($fh, 0, 0) or die "ERROR: Could not rewind file: $!\n";
-
+# csv parser
 my $parser = Text::CSV->new({
     binary              => 1,
     sep_char            => $sep_char,
@@ -64,9 +65,11 @@ my $parser = Text::CSV->new({
     auto_diag           => 0,
 });
 
+# header columns
 my $header_ref = $parser->getline($fh);
 die "ERROR: Could not parse header row\n" if !defined $header_ref;
 
+# Clean column names
 my @colnames = map {
     my $x = $_ // '';
     $x =~ s/^\xEF\xBB\xBF//;
@@ -74,9 +77,11 @@ my @colnames = map {
     $x;
 } @$header_ref;
 
+# find column indexes
 my $idx_tags  = find_col_index(\@colnames, qr/^tags$/i);
 my $idx_label = find_col_index(\@colnames, qr/^(label|class|category|y)$/i);
 
+# data stroage structre
 my %domains_set;
 my %emails_set;
 my %lang_counts;
@@ -85,23 +90,28 @@ my $hq_count = 0;
 while (my $row_ref = $parser->getline($fh)) {
 
     my @fields = @$row_ref;
-
+    
+    # count HQ
     if ($idx_label >= 0 && $idx_label <= $#fields) {
         my $label = $fields[$idx_label] // '';
         $label =~ s/^\s+|\s+$//g;
         $hq_count++ if $label eq 'HQ';
     }
-
+    
+    #combine enitre row
     my $full_row_text = join("\t", map { defined $_ ? $_ : '' } @fields);
-
+    
+    #extract domains
     for my $domain (Tokenizer::extract_domains($full_row_text)) {
         $domains_set{$domain} = 1;
     }
-
+    
+    #extract emails
     for my $email (Tokenizer::extract_emails($full_row_text)) {
         $emails_set{$email} = 1;
     }
-
+    
+    # Process Programming tags
     if ($idx_tags >= 0 && $idx_tags <= $#fields) {
         my $tag_field = $fields[$idx_tags] // '';
         my @tags = Tokenizer::extract_tags($tag_field);
@@ -115,13 +125,13 @@ write_lines_sorted("web_regex.txt", [ sort keys %domains_set ]);
 write_lines_sorted("email_regex.txt", [ sort keys %emails_set ]);
 
 print "\n";
-print "1. There are " . (scalar keys %domains_set) . " unique website domains in StackOverflow.csv\n";
+print "1. There are " . (scalar keys %domains_set) . " unique website domains in " . basename($csv_path) . "\n";
 print "   web_regex.txt has been written...\n\n";
 
-print "2. There are " . (scalar keys %emails_set) . " unique emails in StackOverflow.csv\n";
+print "2. There are " . (scalar keys %emails_set) . " unique emails in " . basename($csv_path) . "\n";
 print "   email_regex.txt has been written...\n\n";
 
-print "3. There are $hq_count high quality (HQ) entries in StackOverflow.csv\n\n";
+print "3. There are $hq_count high quality (HQ) entries in " . basename($csv_path) . "\n\n";
 
 print "4. The five most popular programming languages mentioned in the Tags column are:\n";
 
@@ -137,12 +147,14 @@ for my $pair (@top5) {
 print "\n";
 
 exit 0;
-
+# Helpers
 sub usage {
-    print "Usage:\n";
-    print "  ./StackOverflow.perl\n";
-    print "  ./StackOverflow.perl --scope-demo\n";
-    exit 1;
+  print "Usage:\n";
+  print "  ./stackoverflow.perl                 # run normal mode (CSV next to script)\n";
+  print "  ./stackoverflow.perl --csv FILE      # specify CSV path\n";
+  print "  ./stackoverflow.perl --scope-demo    # run Chapter 5 scope demo\n";
+  print "  ./stackoverflow.perl --help\n";
+  exit 1;
 }
 
 sub detect_separator {
@@ -159,63 +171,46 @@ sub detect_separator {
 sub find_col_index {
 
     my ($cols_ref, $regex) = @_;
-
     for (my $i = 0; $i < @$cols_ref; $i++) {
         if (defined $cols_ref->[$i] && $cols_ref->[$i] =~ $regex) {
             return $i;
         }
     }
-
     return -1;
 }
 
 sub write_lines_sorted {
-
     my ($filename, $lines_ref) = @_;
-
     open(my $out, '>', $filename) or die "ERROR: Cannot write $filename: $!\n";
-
     for my $line (@$lines_ref) {
         next if !defined $line || $line eq '';
         print $out "$line\n";
     }
-
     close($out);
 }
 
+# Chapter 5 Scope Demo
 sub run_scope_demo {
-
     print "\n[Lexical demo]\n";
-
     my $x = 10;
     print "  outer x = $x\n";
-
     {
         my $x = 99;
         print "  inner x = $x\n";
     }
-
     print "  outer x (after block) = $x\n\n";
-
     print "[Package + dynamic rebinding demo]\n";
     print "  Tokenizer::STRIP_WWW (default) = $Tokenizer::STRIP_WWW\n";
-
     my $sample = "See https://www.example.com/path for details";
-
     my @d1 = Tokenizer::extract_domains($sample);
     print "  sample domain => " . ($d1[0] // '(none)') . "\n\n";
 
     {
         print "  (local override begins)\n";
-
         local $Tokenizer::STRIP_WWW = 0;
-
         print "  Tokenizer::STRIP_WWW (inside local) = $Tokenizer::STRIP_WWW\n";
-
         my @d2 = Tokenizer::extract_domains($sample);
-
         print "  sample domain => " . ($d2[0] // '(none)') . "\n";
-
         print "  (local override ends)\n\n";
     }
 

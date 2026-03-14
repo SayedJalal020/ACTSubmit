@@ -1,3 +1,11 @@
+#********************************************************************
+# NAME: Sayed Jalal Sayed M Nasim
+# ASGT: Activity 03
+# ORGN: CSUB - CMPS 3500
+# FILE: StackOverflow.perl
+# DATE: 03/13/2025
+#********************************************************************
+
 package Tokenizer;
 
 use strict;
